@@ -1,0 +1,35 @@
+#!/bin/dash
+
+# Check .pushy repository directory is valid
+if [ ! -d ".pushy" ]; then
+    echo "pushy-show: error: pushy repository directory .pushy not found" >&2
+    exit 1
+fi
+
+arg=$1
+filename=$(echo "$arg" | cut -d ":" -f2)
+comm=$(echo "$arg" | cut -d ":" -f1)
+
+# Set index to commit if no commit specified 
+if [ -z "$comm" ]; then
+    comm="index"
+fi
+
+if [ "$comm" = "index" ]; then
+    # Show from the index
+    if [ -f ".pushy/index/$filename" ]; then
+        cat ".pushy/index/$filename"
+    else
+        echo "pushy-show: error: '$filename' not found in index" >&2
+    fi
+else
+    # Show from the commit
+    commit_dir=".pushy/commits/$comm"
+    if [ ! -d "$commit_dir" ]; then
+        echo "pushy-show: error: unknown commit '$comm'" >&2
+    elif [ ! -f "$commit_dir/$filename" ]; then
+        echo "pushy-show: error: '$filename' not found in commit $comm" >&2
+    else
+        cat "$commit_dir/$filename"
+    fi
+fi

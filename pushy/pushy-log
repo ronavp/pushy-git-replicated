@@ -1,0 +1,19 @@
+#!/bin/dash
+
+# Check .pushy repository directory is valid
+if [ ! -d ".pushy" ]; then
+    echo "pushy-log: error: pushy repository directory .pushy not found" >&2
+    exit 1
+fi
+
+# Get commits in reverse order
+commits=$(ls -r .pushy/commits)
+
+for commit in $commits; do
+    # Check commits directory for commits made
+    commit_dir=".pushy/commits/$commit"
+    if [ -d "$commit_dir" ]; then
+        msg=$(cat "$commit_dir/message.txt")
+        echo "$commit $msg"
+    fi
+done

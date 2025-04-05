@@ -1,0 +1,57 @@
+#!/bin/dash
+
+# Check if .pushy repository directory is valid
+if [ ! -d ".pushy" ]; then
+    echo "pushy-rm: error: pushy repository directory .pushy not found" >&2
+    exit 1
+fi
+
+cached=false
+forced=false
+for arg in "$@"; do
+    if [ "$arg" = "--cached" ]; then cached=true; fi
+    if [ "$arg" = "--force" ]; then forced=true; fi
+done
+
+# Remove files based on flags
+for file in "$@"; do
+    # Skip the arguments if they are flags
+    if [ "$file" = "--cached" ] || [ "$file" = "--force" ]; then
+        continue
+    fi
+
+    # Handle --cached flag
+    if [ "$cached" = true ]; then
+        if [ -f ".pushy/index/$file" ]; then
+            # Remove the file and its added tag 
+            rm ".pushy/index/$file" 
+            rm -f ".pushy/index/$file.added"  
+            # Create a new file that is tagged deleted
+            touch ".pushy/index/$file.deleted" 
+        else
+            echo "pushy-rm: error: '$file' is not in the staging area" >&2
+        fi
+        continue  
+    fi
+
+    # Handle --force flag
+    if [ "$forced" = true ]; then
+        if [ -f "$file" ]; then
+            rm -f "$file" 
+        fi
+        continue  
+    fi
+    
+    # Normal file removal with a warning if the file has staged changes
+    if [ -f ".pushy/index/$file" ]; then
+        if [ -f ".pushy/index/$file.added" ]; then
+            echo "pushy-rm: error: '$file' has staged changes in the index" >&2
+        else
+            # The file is not tagged as added so it might have been committed previously
+            touch ".pushy/index/$file.deleted" 
+            rm -f "$file"  
+        fi
+    else
+        echo "pushy-rm: error: '$file' is not in the pushy repository" >&2
+    fi
+done

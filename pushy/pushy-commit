@@ -1,0 +1,128 @@
+#!/bin/dash
+
+msg=$2
+dash_a=false
+
+# Check valid arguments
+if [ "$1" = "-a" ]; then
+    dash_a=true
+    if [ "$2" = "-m" ] && [ -n "$3" ]; then
+        msg=$3
+    else
+        echo "usage: pushy-commit [-a] -m commit-message" >&2
+        exit 1
+    fi
+elif [ "$1" = "-m" ] && [ -n "$2" ]; then
+    msg=$2
+else 
+    echo "usage: pushy-commit [-a] -m commit-message" 
+    exit 1
+fi
+
+# Check if .pushy repository exists
+if [ ! -d ".pushy" ]; then
+    echo "pushy-commit: error: pushy repository directory .pushy not found" >&2
+    exit 1
+fi
+
+# Check if index is empty where nothing was staged for committing 
+if [ ! "$(ls -A .pushy/index/)" ]; then
+    echo "nothing to commit"
+    exit 1
+fi 
+
+#  If -a in the arugment add all modified files to the index
+if [ "$dash_a" = true ]; then
+    for file in [ $(ls .pushy/index) ]; do
+        # Skip if it's not a regular file
+        if [ ! -f "$file" ]; then 
+            continue
+        fi 
+
+        # Check if the file has been modified since last added to the index
+        if ! cmp -s "$file" ".pushy/index/$file"; then
+            # File has changed, copy to index and mark as changed
+            cp "$file" ".pushy/index/"
+            touch ".pushy/index/$file.added"
+            changes=1
+        fi
+    done
+fi
+
+# Assume no commits yet
+last_commit_num=-1
+# Check if the commits directory exists and is not empty
+if [ "$(ls -A .pushy/commits)" ]; then
+    for dir in .pushy/commits/*; do
+        commit_num=$(basename "$dir")
+        if [ "$commit_num" -gt "$last_commit_num" ]; then
+            last_commit_num="$commit_num"
+        fi
+    done
+fi
+
+# Changes in files tracked 
+changes=0
+
+# Check for file deletions first
+for file in .pushy/index/*.deleted; do
+    if [ -f "$file" ]; then
+        changes=1
+        break
+    fi
+done
+
+# Now check for new or modified files
+for file in .pushy/index/*; do
+    filename=$(basename "$file")
+    # Ignore .added and .deleted files when checking for actual changes
+    case "$filename" in
+        *.added|*.deleted) continue;;
+    esac
+
+    # If file does not exist in the last commit or is different mark as changed
+    if [ ! -f ".pushy/commits/$last_commit_num/$filename" ] || ! cmp -s "$file" ".pushy/commits/$last_commit_num/$filename"; then
+        changes=1
+        break
+    fi
+done
+
+# Exit if no changes to commit
+if [ "$changes" -eq 0 ]; then
+    echo "nothing to commit"
+    exit 1
+fi
+
+# Creating a new commit
+commit_num=$((last_commit_num + 1))
+new_commit_dir=".pushy/commits/$commit_num"
+mkdir "$new_commit_dir"
+
+# Move staged changes to the new commit directory
+for file in .pushy/index/*; do
+    filename=$(basename "$file")
+    # Exclude the tagged .added and .deleted files
+    case "$filename" in
+        *.added|*.deleted) ;;
+        *) cp "$file" "$new_commit_dir/";;
+    esac
+done
+
+# Handle .deleted files by moving them to the commit directory
+for file in .pushy/index/*.deleted; do
+    if [ -f "$file" ]; then
+        mv "$file" "$new_commit_dir/"
+    fi
+done
+
+# Remove .added tags
+for file in .pushy/index/*.added; do
+    if [ -f "$file" ]; then
+        rm "$file"
+    fi
+done
+
+# Save the commit message
+echo "$msg" > "$new_commit_dir/message.txt"
+
+echo "Committed as commit $commit_num"

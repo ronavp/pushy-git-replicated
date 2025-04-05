@@ -1,0 +1,34 @@
+#!/bin/dash
+
+# Check .pushy repository directory is valid 
+if [ ! -d ".pushy" ]; then 
+    echo "pushy-add: error: pushy repository directory .pushy not found" >&2
+    exit 1
+fi
+
+# Check if no file arguments were provided
+if [ "$#" -eq 0 ]; then
+    echo "usage: pushy-add <filenames>" 
+    exit 1
+fi
+
+for file in "$@"; do
+    # Check that file name is starting with an alphanumeric character
+    first_char=$(echo "$file" | cut -c1)
+    if ! echo "$first_char" | grep -q '[a-zA-Z0-9]'; then 
+        echo "pushy-add: error: invalid filename '$file'" >&2
+        continue
+    fi 
+
+    # Check if regular file and it exists 
+    if [ -f "$file" ]; then 
+        cp "$file" ".pushy/index/"
+        # Tag the file as added to the staging process
+        touch ".pushy/index/$file.added"
+    elif [ -f ".pushy/index/$file" ]; then
+        # Only tag as deleted if it was previously added to the index
+        touch ".pushy/index/$file.deleted"
+    else 
+        echo "pushy-add: error: can not open '$file'" >&2
+    fi
+done
